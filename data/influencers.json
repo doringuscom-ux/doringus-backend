@@ -1,0 +1,110 @@
+[
+    {
+        "id": "sarah-2",
+        "name": "Sarah Parker",
+        "username": "sarah-parker",
+        "category": "beauty",
+        "profileImage": "https://images.unsplash.com/photo-1544005313-94ddf0286df2",
+        "bio": "Beauty tips and tutorials focusing on natural glow and skincare routines. Helping you find your inner radiance through expert advice.",
+        "followers": "850K",
+        "campaigns": "80+",
+        "engagement": "5.2%",
+        "rating": "4.8",
+        "location": "Paris, France",
+        "price": "Starts from £300",
+        "responseTime": "12 Hours",
+        "availability": "Booking June",
+        "skills": [
+            "Makeup Artistry",
+            "Skincare Science",
+            "Product Photography"
+        ],
+        "videoUrl": "https://youtu.be/NgjERPTaC4Y?si=dSmpVEQ9y9JJBIxS",
+        "gallery": [
+            "https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9",
+            "https://images.unsplash.com/photo-1512496011212-72d204b648cf",
+            "https://images.unsplash.com/photo-1515377905703-c4788e51af15"
+        ],
+        "awards": [
+            "L'Oreal Beauty Choice 2023",
+            "Beauty Blogger of the Year"
+        ],
+        "socialLinks": {
+            "instagram": "sarah_beauty",
+            "youtube": "GlowWithSarah"
+        },
+        "isFeatured": true
+    },
+    {
+        "id": "1768815970002",
+        "name": "vikas",
+        "username": "vikas_rajput_5_5",
+        "email": "digitalorra.developer1@gmail.com",
+        "phone": "7018610136",
+        "password": "$2b$10$oq4erOeqGuFqVnZcFeKDNO2.TG8C/d6tre58fcqoVUVLQQr5X7aBm",
+        "instagramLink": "https://instagram.com/vikas_thakur_5_5",
+        "youtubeLink": "https://www.youtube.com/watch?v=b0v-X9pcSos&list=RDBH7B7AHk8uk&index=6",
+        "instagramFollowers": "10k",
+        "youtubeSubscribers": "10k",
+        "pricePerReel": "25",
+        "youtubePromotionPrice": "10",
+        "collaborationPrice": "20",
+        "category": "tech",
+        "status": "Approved",
+        "joinedDate": "2026-01-19",
+        "profileImage": "http://localhost:5000/uploads/1768822878362-86278515.jpg"
+    },
+    {
+        "id": "1768825491571",
+        "name": "Vikas",
+        "username": "vrajput438",
+        "email": "vikas123@gmail.com",
+        "phone": "7018610136",
+        "password": "$2b$10$bIVz9qH4of8m0R6BjTZzoOHLAP0j6TRcdxNc50lqsLMCZFLxsLybO",
+        "instagramLink": "https://instagram.com/vikas_thakur_5_5",
+        "youtubeLink": "https://www.youtube.com/",
+        "instagramFollowers": "10k",
+        "youtubeSubscribers": "11k",
+        "pricePerReel": "12",
+        "youtubePromotionPrice": "10",
+        "collaborationPrice": "12",
+        "category": "tech",
+        "status": "Pending",
+        "joinedDate": "2026-01-19"
+    },
+    {
+        "id": "1768890192393",
+        "name": "ashu",
+        "username": "ashu_kumar_123",
+        "email": "ashukumar123@gmail.com",
+        "phone": "8815510921",
+        "password": "$2b$10$ZyuimFz7BH7PbBaNtuYxnOrfjjVW6y8vYtrbaVhSQjzj4R4nYDw5u",
+        "instagramLink": "sdsfddfsdssdf",
+        "youtubeLink": "dshjakuiesfdjk",
+        "instagramFollowers": "10k",
+        "youtubeSubscribers": "10k",
+        "pricePerReel": "100",
+        "youtubePromotionPrice": "200",
+        "collaborationPrice": "500",
+        "category": "travel",
+        "status": "Approved",
+        "joinedDate": "2026-01-20",
+        "profileImage": "http://localhost:5000/uploads/1768895923522-490624692.jpeg",
+        "instagramReels": [
+            "https://www.instagram.com/reels/DTAhEAZD1GI/",
+            "https://www.instagram.com/reels/DTAhEAZD1GI/",
+            "https://www.instagram.com/reels/DTAhEAZD1GI/",
+            "https://www.instagram.com/reels/DTAhEAZD1GI/"
+        ],
+        "youtubeVideos": [
+            "https://www.youtube.com/watch?v=I0IbIl4mHwI&list=RDI0IbIl4mHwI&start_radio=1",
+            "https://www.youtube.com/watch?v=NgjERPTaC4Y&list=RDNgjERPTaC4Y&start_radio=1",
+            "https://www.youtube.com/watch?v=3tMc7d3cJME&list=RD3tMc7d3cJME&start_radio=1",
+            "https://www.youtube.com/watch?v=DLN4yfKYTqE&list=RDDLN4yfKYTqE&start_radio=1"
+        ],
+        "gallery": [
+            "http://localhost:5000/uploads/1768897526976-74670548.jpeg",
+            "http://localhost:5000/uploads/1768897543963-592337399.jpg"
+        ]
+    }
+]

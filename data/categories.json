@@ -1,0 +1,58 @@
+[
+    {
+        "id": "fashion",
+        "label": "Fashion",
+        "icon": "Sparkles",
+        "image": "https://images.unsplash.com/photo-1445205170230-053b830c6050?q=80&w=400&h=400&fit=crop",
+        "status": "Active"
+    },
+    {
+        "id": "travel",
+        "label": "Travel",
+        "icon": "Plane",
+        "image": "https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?q=80&w=400&h=400&fit=crop",
+        "status": "Active"
+    },
+    {
+        "id": "food",
+        "label": "Food",
+        "icon": "Coffee",
+        "image": "https://images.unsplash.com/photo-1504674900247-0877df9cc836?q=80&w=400&h=400&fit=crop",
+        "status": "Active"
+    },
+    {
+        "id": "beauty",
+        "label": "Beauty",
+        "icon": "Camera",
+        "image": "https://images.unsplash.com/photo-1522335789203-aabd1fc54bc9?q=80&w=400&h=400&fit=crop",
+        "status": "Active"
+    },
+    {
+        "id": "fitness",
+        "label": "Fitness",
+        "icon": "Dumbbell",
+        "image": "https://images.unsplash.com/photo-1517836357463-d25dfeac3438?q=80&w=400&h=400&fit=crop",
+        "status": "Active"
+    },
+    {
+        "id": "tech",
+        "label": "Tech",
+        "icon": "Laptop",
+        "image": "https://images.unsplash.com/photo-1485827404703-89b55fcc595e?q=80&w=400&h=400&fit=crop",
+        "status": "Active"
+    },
+    {
+        "id": "gaming",
+        "label": "Gaming",
+        "icon": "Gamepad2",
+        "image": "https://images.unsplash.com/photo-1511512578047-dfb367046420?q=80&w=400&h=400&fit=crop",
+        "status": "Active"
+    },
+    {
+        "id": "finance",
+        "label": "Finance",
+        "icon": "TrendingUp",
+        "image": "https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?q=80&w=400&h=400&fit=crop",
+        "status": "Active"
+    }
+]
