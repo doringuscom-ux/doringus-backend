@@ -47,12 +47,5 @@
         "icon": "Gamepad2",
         "image": "https://images.unsplash.com/photo-1511512578047-dfb367046420?q=80&w=400&h=400&fit=crop",
         "status": "Active"
-    },
-    {
-        "id": "finance",
-        "label": "Finance",
-        "icon": "TrendingUp",
-        "image": "https://images.unsplash.com/photo-1590283603385-17ffb3a7f29f?q=80&w=400&h=400&fit=crop",
-        "status": "Active"
     }
 ]
