@@ -44,7 +44,7 @@ class MongoAdapter {
                 // Return plain objects to match LocalDb behavior
                 return docs.map(d => {
                     const obj = d.toObject();
-                    obj.id = obj._id.toString(); // Ensure id exists
+                    obj.id = obj.id || obj._id.toString(); // Preserve existing ID or use _id
                     return obj;
                 });
             },
@@ -52,32 +52,46 @@ class MongoAdapter {
                 const doc = await Model.findOne(query);
                 if (!doc) return null;
                 const obj = doc.toObject();
-                obj.id = obj._id.toString();
+                obj.id = obj.id || obj._id.toString();
                 return obj;
             },
             findById: async (id) => {
-                const doc = await Model.findById(id);
+                let doc;
+                if (mongoose.Types.ObjectId.isValid(id)) {
+                    doc = await Model.findById(id);
+                }
+                if (!doc) doc = await Model.findOne({ id: id }); // Fallback to custom id field
                 if (!doc) return null;
                 const obj = doc.toObject();
-                obj.id = obj._id.toString();
+                obj.id = obj.id || obj._id.toString();
                 return obj;
             },
             create: async (data) => {
                 const doc = new Model(data);
                 await doc.save();
                 const obj = doc.toObject();
-                obj.id = obj._id.toString();
+                obj.id = obj.id || obj._id.toString();
                 return obj;
             },
             findByIdAndUpdate: async (id, data) => {
-                const doc = await Model.findByIdAndUpdate(id, data, { new: true });
+                let doc;
+                if (mongoose.Types.ObjectId.isValid(id)) {
+                    doc = await Model.findByIdAndUpdate(id, data, { new: true });
+                }
+                if (!doc) {
+                    doc = await Model.findOneAndUpdate({ id: id }, data, { new: true });
+                }
                 if (!doc) return null;
                 const obj = doc.toObject();
-                obj.id = obj._id.toString();
+                obj.id = obj.id || obj._id.toString();
                 return obj;
             },
             findByIdAndDelete: async (id) => {
-                await Model.findByIdAndDelete(id);
+                if (mongoose.Types.ObjectId.isValid(id)) {
+                    await Model.findByIdAndDelete(id);
+                } else {
+                    await Model.findOneAndDelete({ id: id });
+                }
                 return { success: true };
             }
         };

@@ -1,5 +1,5 @@
 /* eslint-disable no-console */
-try { require('dotenv').config(); } catch (e) { }
+require('dotenv').config();
 
 const express = require('express');
 const cors = require('cors');
@@ -19,9 +19,30 @@ const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
 // --- MIDDLEWARE ---
 app.use(compression());
 app.use(cors({
-    origin: '*',
+    origin: (origin, callback) => {
+        const allowedOrigins = [
+            'http://localhost:5173',
+            'http://localhost:5174',
+            'http://localhost:3000',
+            'https://influencer-frontend-98vr.onrender.com',
+            'https://doringus.com',
+            'https://doringus.com/',
+            'https://www.doringus.com',
+            'https://www.doringus.com/',
+            'https://influencer-backend-xjw2.onrender.com'
+        ];
+
+        // Relaxed matching for production connectivity
+        if (!origin || allowedOrigins.includes(origin) || origin.endsWith('.doringus.com') || origin.endsWith('.onrender.com')) {
+            callback(null, true);
+        } else {
+            console.log(`[CORS] Rejected Origin: ${origin}`);
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
+    credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control']
+    allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control', 'X-Requested-With']
 }));
 app.use(bodyParser.json());
 
@@ -57,27 +78,41 @@ const isAdmin = (req, res, next) => {
 };
 
 // --- API ROUTES ---
+// --- API ROUTES ---
 const apiRouter = express.Router();
+
+// Friendly Root Message
+apiRouter.get('/', (req, res) => {
+    res.json({
+        status: 'online',
+        message: 'Doringus API is running safely.',
+        version: '3.0.0',
+        timestamp: new Date().toISOString()
+    });
+});
 
 apiRouter.get('/health', (req, res) => res.json({
     status: 'ok',
-    engine: 'Doringus-Core-v2-Pro',
-    version: '2.1.0',
-    timestamp: new Date().toISOString()
+    engine: 'Doringus-Core-v3-Enterprise',
+    version: '3.0.0',
+    timestamp: new Date().toISOString(),
+    env: process.env.NODE_ENV,
+    db: db.users ? 'connected' : 'disconnected'
 }));
 
-// Auth
+// --- AUTH ROUTES ---
 apiRouter.post('/auth/login', async (req, res) => {
     const { username, password } = req.body;
     try {
+        // Super Admin Hardcoded Bypass
         if (username === 'AddaLegend_9' && password === 'S0c!al@ddA#97') {
             const token = jwt.sign({ username, role: 'admin' }, SECRET_KEY, { expiresIn: JWT_EXPIRES_IN });
             return res.json({ success: true, token, user: { username, role: 'admin', name: 'Super Admin' } });
         }
         const user = await db.users.findOne({ username });
         if (user && await bcrypt.compare(password, user.password)) {
-            const token = jwt.sign({ id: user.id, username, role: user.role }, SECRET_KEY, { expiresIn: JWT_EXPIRES_IN });
-            return res.json({ success: true, token, user: { username, role: user.role, email: user.email } });
+            const token = jwt.sign({ id: user.id || user._id, username, role: user.role }, SECRET_KEY, { expiresIn: JWT_EXPIRES_IN });
+            return res.json({ success: true, token, user: { id: user.id || user._id, username, role: user.role, email: user.email } });
         }
         res.status(401).json({ success: false, message: 'Invalid credentials' });
     } catch (e) { res.status(500).json({ message: 'Server error' }); }
@@ -86,45 +121,15 @@ apiRouter.post('/auth/login', async (req, res) => {
 apiRouter.post('/auth/register', async (req, res) => {
     try {
         const { username, password, email, role = 'user' } = req.body;
-        if (await db.users.findOne({ username })) return res.status(400).json({ message: 'User already exists' });
+        if (await db.users.findOne({ $or: [{ username }, { email }] })) return res.status(400).json({ message: 'User or Email already exists' });
         const hashedPassword = await bcrypt.hash(password, 10);
         const newUser = await db.users.create({ username, password: hashedPassword, email, role });
-        const token = jwt.sign({ id: newUser.id, username, role }, SECRET_KEY, { expiresIn: JWT_EXPIRES_IN });
-        res.json({ success: true, token, user: { username, role, email } });
+        const token = jwt.sign({ id: newUser.id || newUser._id, username, role }, SECRET_KEY, { expiresIn: JWT_EXPIRES_IN });
+        res.json({ success: true, token, user: { id: newUser.id || newUser._id, username, role, email } });
     } catch (e) { res.status(500).json({ message: 'Server error' }); }
 });
 
-apiRouter.post('/influencers/login', async (req, res) => {
-    try {
-        const { email, password } = req.body;
-        const influencer = await db.influencers.findOne({ email });
-        if (influencer && await bcrypt.compare(password, influencer.password)) {
-            if (influencer.status !== 'Approved') return res.status(403).json({ success: false, message: 'Pending Approval' });
-            const token = jwt.sign({ id: influencer.id, username: influencer.name, role: 'influencer' }, SECRET_KEY, { expiresIn: JWT_EXPIRES_IN });
-            const { password: _, ...safe } = influencer;
-            return res.json({ success: true, token, user: { ...safe, role: 'influencer' } });
-        }
-        res.status(401).json({ success: false, message: 'Invalid credentials' });
-    } catch (e) { res.status(500).json({ message: 'Server error' }); }
-});
-
-apiRouter.post('/influencers/register', async (req, res) => {
-    try {
-        const { email, username, password } = req.body;
-        if (await db.influencers.findOne({ email }) || await db.influencers.findOne({ username }))
-            return res.status(400).json({ message: 'Exists already' });
-        const hashedPassword = await bcrypt.hash(password, 10);
-        await db.influencers.create({
-            ...req.body,
-            password: hashedPassword,
-            status: 'Pending',
-            isFeatured: false,
-            joinedDate: new Date().toISOString().split('T')[0]
-        });
-        res.json({ success: true, message: 'Registered successfully' });
-    } catch (e) { res.status(500).json({ message: 'Server error' }); }
-});
-
+// --- CATEGORY ROUTES ---
 apiRouter.get('/categories', async (req, res) => {
     try {
         const list = await db.categories.find({});
@@ -132,6 +137,28 @@ apiRouter.get('/categories', async (req, res) => {
     } catch (e) { res.json([]); }
 });
 
+apiRouter.post('/categories', authenticate, isAdmin, async (req, res) => {
+    try {
+        const cat = await db.categories.create(req.body);
+        res.json(cat);
+    } catch (e) { res.status(500).json({ message: 'Create failed' }); }
+});
+
+apiRouter.put('/categories/:id', authenticate, isAdmin, async (req, res) => {
+    try {
+        const cat = await db.categories.findByIdAndUpdate(req.params.id, req.body);
+        res.json(cat);
+    } catch (e) { res.status(500).json({ message: 'Update failed' }); }
+});
+
+apiRouter.delete('/categories/:id', authenticate, isAdmin, async (req, res) => {
+    try {
+        await db.categories.findByIdAndDelete(req.params.id);
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ message: 'Delete failed' }); }
+});
+
+// --- INFLUENCER ROUTES ---
 apiRouter.get('/influencers', async (req, res) => {
     try {
         const list = await db.influencers.find({});
@@ -149,7 +176,80 @@ apiRouter.get('/influencers/:username', async (req, res) => {
     } catch (e) { res.status(500).json({ message: 'Server error' }); }
 });
 
-apiRouter.get('/inquiries', async (req, res) => res.json(await db.inquiries.find({})));
+apiRouter.post('/influencers/login', async (req, res) => {
+    try {
+        const { email, password } = req.body;
+        const influencer = await db.influencers.findOne({ email });
+        if (influencer && await bcrypt.compare(password, influencer.password)) {
+            if (influencer.status !== 'Approved') return res.status(403).json({ success: false, message: 'Pending Approval' });
+            const token = jwt.sign({ id: influencer.id || influencer._id, username: influencer.name, role: 'influencer' }, SECRET_KEY, { expiresIn: JWT_EXPIRES_IN });
+            const { password: _, ...safe } = influencer;
+            return res.json({ success: true, token, user: { ...safe, role: 'influencer' } });
+        }
+        res.status(401).json({ success: false, message: 'Invalid credentials' });
+    } catch (e) { res.status(500).json({ message: 'Server error' }); }
+});
+
+apiRouter.post('/influencers/register', async (req, res) => {
+    try {
+        const { email, username, password } = req.body;
+        if (await db.influencers.findOne({ $or: [{ email }, { username }] }))
+            return res.status(400).json({ message: 'Email or Username exists already' });
+        const hashedPassword = await bcrypt.hash(password, 10);
+        const newItem = await db.influencers.create({
+            ...req.body,
+            password: hashedPassword,
+            status: 'Pending',
+            isFeatured: false,
+            joinedDate: new Date().toISOString().split('T')[0]
+        });
+        res.json({ success: true, message: 'Registered successfully', id: newItem.id || newItem._id });
+    } catch (e) { res.status(500).json({ message: 'Server error' }); }
+});
+
+// Admin specific influencer routes
+apiRouter.post('/influencers', authenticate, isAdmin, async (req, res) => {
+    try {
+        if (req.body.password) req.body.password = await bcrypt.hash(req.body.password, 10);
+        const inf = await db.influencers.create(req.body);
+        res.json(inf);
+    } catch (e) { res.status(500).json({ message: 'Create failed' }); }
+});
+
+apiRouter.put('/influencers/status/:id', authenticate, isAdmin, async (req, res) => {
+    try {
+        const inf = await db.influencers.findByIdAndUpdate(req.params.id, { status: req.body.status });
+        res.json({ success: true, influencer: inf });
+    } catch (e) { res.status(500).json({ message: 'Status update failed' }); }
+});
+
+apiRouter.put('/influencers/update/:id', authenticate, async (req, res) => {
+    try {
+        // Only admin or the influencer themselves can update
+        if (req.user.role !== 'admin' && req.user.id !== req.params.id) {
+            return res.status(403).json({ message: 'Forbidden' });
+        }
+        if (req.body.password) req.body.password = await bcrypt.hash(req.body.password, 10);
+        const inf = await db.influencers.findByIdAndUpdate(req.params.id, req.body);
+        res.json({ success: true, influencer: inf });
+    } catch (e) { res.status(500).json({ message: 'Update failed' }); }
+});
+
+apiRouter.delete('/influencers/:id', authenticate, isAdmin, async (req, res) => {
+    try {
+        await db.influencers.findByIdAndDelete(req.params.id);
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ message: 'Delete failed' }); }
+});
+
+// --- INQUIRY ROUTES ---
+apiRouter.get('/inquiries', authenticate, isAdmin, async (req, res) => {
+    try {
+        const list = await db.inquiries.find({});
+        res.json(list);
+    } catch (e) { res.json([]); }
+});
+
 apiRouter.post('/inquiries', async (req, res) => {
     try {
         const inq = await db.inquiries.create({ ...req.body, status: 'Pending' });
@@ -157,6 +257,66 @@ apiRouter.post('/inquiries', async (req, res) => {
     } catch (e) { res.status(500).json({ message: 'Error' }); }
 });
 
+apiRouter.put('/inquiries/:id/status', authenticate, isAdmin, async (req, res) => {
+    try {
+        await db.inquiries.findByIdAndUpdate(req.params.id, { status: req.body.status });
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ message: 'Update failed' }); }
+});
+
+apiRouter.delete('/inquiries/:id', authenticate, isAdmin, async (req, res) => {
+    try {
+        await db.inquiries.findByIdAndDelete(req.params.id);
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ message: 'Delete failed' }); }
+});
+
+// --- USER MANAGEMENT ROUTES (Admin) ---
+apiRouter.get('/users', authenticate, isAdmin, async (req, res) => {
+    try {
+        const list = await db.users.find({});
+        res.json(list);
+    } catch (e) { res.json([]); }
+});
+
+apiRouter.post('/users', authenticate, isAdmin, async (req, res) => {
+    try {
+        if (req.body.password) req.body.password = await bcrypt.hash(req.body.password, 10);
+        const user = await db.users.create(req.body);
+        res.json(user);
+    } catch (e) { res.status(500).json({ message: 'Create failed' }); }
+});
+
+apiRouter.delete('/users/:id', authenticate, isAdmin, async (req, res) => {
+    try {
+        await db.users.findByIdAndDelete(req.params.id);
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ message: 'Delete failed' }); }
+});
+
+// --- CAMPAIGN ROUTES ---
+apiRouter.get('/campaigns', async (req, res) => {
+    try {
+        const list = await db.campaigns.find({});
+        res.json(list);
+    } catch (e) { res.json([]); }
+});
+
+apiRouter.post('/campaigns', authenticate, isAdmin, async (req, res) => {
+    try {
+        const camp = await db.campaigns.create(req.body);
+        res.json(camp);
+    } catch (e) { res.status(500).json({ message: 'Create failed' }); }
+});
+
+apiRouter.delete('/campaigns/:id', authenticate, isAdmin, async (req, res) => {
+    try {
+        await db.campaigns.findByIdAndDelete(req.params.id);
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ message: 'Delete failed' }); }
+});
+
+// --- FILE UPLOAD ---
 const multer = require('multer');
 const storage = multer.diskStorage({
     destination: (req, file, cb) => cb(null, UPLOADS_PATH),
@@ -213,14 +373,14 @@ const start = async () => {
             await seed();
         }
 
-        app.listen(PORT, () => {
+        app.listen(PORT, "0.0.0.0", () => {
             console.log(`Server running on port ${PORT}`);
-            console.log('[System] Status: 100% Ready');
         });
     } catch (e) {
         console.error('[System] CRITICAL STARTUP ERROR:', e.message);
         process.exit(1);
     }
 };
+
 
 start();
