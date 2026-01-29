@@ -29,6 +29,7 @@ app.use(cors({
             process.env.CLIENT_URL,
             'https://doringus.com',
             'https://www.doringus.com',
+            'https://doringus-frontend.onrender.com',
             'https://influencer-frontend-98v7.onrender.com'
         ].filter(Boolean);
 
