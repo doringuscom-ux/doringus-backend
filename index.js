@@ -19,24 +19,22 @@ const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
 // --- MIDDLEWARE ---
 app.use(compression());
 app.use(cors({
-    origin: (origin, callback) => {
+    origin: function (origin, callback) {
+        // Allow requests with no origin (like mobile apps or curl requests)
+        if (!origin) return callback(null, true);
+
         const allowedOrigins = [
-            'http://localhost:5173',
-            'http://127.0.0.1:5173',
-            'http://localhost:5174',
-            'http://127.0.0.1:5174',
-            'http://localhost:3000',
-            process.env.CLIENT_URL,
+            'https://doringus-frontend.onrender.com',
             'https://doringus.com',
             'https://www.doringus.com',
-            'https://doringus-frontend.onrender.com',
-            'https://influencer-frontend-98v7.onrender.com'
-        ].filter(Boolean);
+            'http://localhost:5173',
+            'http://localhost:3000'
+        ];
 
-        if (!origin || allowedOrigins.includes(origin) || origin.endsWith('.onrender.com')) {
+        if (allowedOrigins.indexOf(origin) !== -1 || origin.endsWith('.onrender.com')) {
             callback(null, true);
         } else {
-            console.log(`[CORS] Rejected Origin: ${origin}`);
+            console.log('[CORS Blocked]', origin);
             callback(new Error('Not allowed by CORS'));
         }
     },
