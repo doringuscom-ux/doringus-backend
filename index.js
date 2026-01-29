@@ -12,7 +12,7 @@ const compression = require('compression');
 const db = require('./db');
 
 const app = express();
-const PORT = process.env.PORT || 8080;
+const PORT = process.env.PORT || 5000;
 const SECRET_KEY = process.env.JWT_SECRET || 'doring_super_secure_jwt_2026';
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
 
@@ -22,18 +22,17 @@ app.use(cors({
     origin: (origin, callback) => {
         const allowedOrigins = [
             'http://localhost:5173',
+            'http://127.0.0.1:5173',
             'http://localhost:5174',
+            'http://127.0.0.1:5174',
             'http://localhost:3000',
-            'https://influencer-frontend-98vr.onrender.com',
+            process.env.CLIENT_URL,
             'https://doringus.com',
-            'https://doringus.com/',
             'https://www.doringus.com',
-            'https://www.doringus.com/',
-            'https://influencer-backend-xjw2.onrender.com'
-        ];
+            'https://influencer-frontend-98v7.onrender.com'
+        ].filter(Boolean);
 
-        // Relaxed matching for production connectivity
-        if (!origin || allowedOrigins.includes(origin) || origin.endsWith('.doringus.com') || origin.endsWith('.onrender.com')) {
+        if (!origin || allowedOrigins.includes(origin) || origin.endsWith('.onrender.com')) {
             callback(null, true);
         } else {
             console.log(`[CORS] Rejected Origin: ${origin}`);
@@ -44,7 +43,8 @@ app.use(cors({
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control', 'X-Requested-With']
 }));
-app.use(bodyParser.json());
+app.use(bodyParser.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Global Logging
 app.use((req, res, next) => {
@@ -52,12 +52,19 @@ app.use((req, res, next) => {
     next();
 });
 
-// Paths
-const UPLOADS_PATH = path.join(__dirname, 'uploads');
-if (!fs.existsSync(UPLOADS_PATH)) fs.mkdirSync(UPLOADS_PATH);
-app.use('/uploads', express.static(UPLOADS_PATH, { maxAge: '1y' }));
+// --- FILE SYSTEM CONFIG ---
+const UPLOADS_DIR = path.join(__dirname, 'uploads');
 
-// Auth Middleware
+// Ensure directory exists
+if (!fs.existsSync(UPLOADS_DIR)) {
+    fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+    console.log(`[System] Created uploads directory at: ${UPLOADS_DIR}`);
+}
+
+// Serve static files correctly
+app.use('/uploads', express.static(UPLOADS_DIR));
+
+// Auth Middleware (Keep existing)
 const authenticate = (req, res, next) => {
     const token = req.headers['authorization'];
     if (!token) return res.status(401).send({ message: 'No token provided' });
@@ -85,7 +92,7 @@ const apiRouter = express.Router();
 apiRouter.get('/', (req, res) => {
     res.json({
         status: 'online',
-        message: 'Doringus API is running safely.',
+        message: 'DO RING US API is running safely.',
         version: '3.0.0',
         timestamp: new Date().toISOString()
     });
@@ -93,7 +100,7 @@ apiRouter.get('/', (req, res) => {
 
 apiRouter.get('/health', (req, res) => res.json({
     status: 'ok',
-    engine: 'Doringus-Core-v3-Enterprise',
+    engine: 'DO RING US-Core-v3-Enterprise',
     version: '3.0.0',
     timestamp: new Date().toISOString(),
     env: process.env.NODE_ENV,
@@ -319,14 +326,62 @@ apiRouter.delete('/campaigns/:id', authenticate, isAdmin, async (req, res) => {
 // --- FILE UPLOAD ---
 const multer = require('multer');
 const storage = multer.diskStorage({
-    destination: (req, file, cb) => cb(null, UPLOADS_PATH),
-    filename: (req, file, cb) => cb(null, Date.now() + path.extname(file.originalname))
+    destination: (req, file, cb) => {
+        cb(null, UPLOADS_DIR);
+    },
+    filename: (req, file, cb) => {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, uniqueSuffix + path.extname(file.originalname));
+    }
 });
-const upload = multer({ storage });
+const upload = multer({
+    storage,
+    limits: { fileSize: 30 * 1024 * 1024 } // 30MB Limit
+});
 
-apiRouter.post('/upload', upload.single('image'), (req, res) => {
-    if (!req.file) return res.status(400).json({ message: 'No file' });
-    res.json({ success: true, url: `/uploads/${req.file.filename}` });
+apiRouter.post('/upload', (req, res) => {
+    upload.single('image')(req, res, (err) => {
+        if (err) {
+            console.error('[Upload Debug] MULTER ERROR:', err);
+            return res.status(500).json({
+                success: false,
+                message: `Server Upload Error: ${err.message}`,
+                error: err.code || 'UNKNOWN'
+            });
+        }
+
+        if (!req.file) {
+            console.error('[Upload Debug] NO FILE');
+            return res.status(400).json({ success: false, message: 'No file received by server' });
+        }
+
+        console.log(`[Upload Success] File: ${req.file.filename}, Size: ${req.file.size}, Path: ${req.file.path}`);
+        res.json({ success: true, url: `/uploads/${req.file.filename}`, filename: req.file.filename });
+    });
+});
+
+// Debug Uploads Route
+apiRouter.get('/debug/uploads', authenticate, isAdmin, (req, res) => {
+    try {
+        const files = fs.existsSync(UPLOADS_DIR) ? fs.readdirSync(UPLOADS_DIR) : [];
+        const rootFiles = fs.existsSync(ROOT_UPLOADS_DIR) ? fs.readdirSync(ROOT_UPLOADS_DIR) : [];
+        const parentFiles = fs.existsSync(PARENT_UPLOADS_DIR) ? fs.readdirSync(PARENT_UPLOADS_DIR) : [];
+        const tmpFiles = fs.existsSync(TMP_UPLOADS_DIR) ? fs.readdirSync(TMP_UPLOADS_DIR) : [];
+        res.json({
+            UPLOADS_DIR,
+            ROOT_UPLOADS_DIR,
+            PARENT_UPLOADS_DIR,
+            TMP_UPLOADS_DIR,
+            cwd: process.cwd(),
+            dirname: __dirname,
+            files,
+            rootFiles,
+            parentFiles,
+            tmpFiles
+        });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
 });
 
 app.use('/api', apiRouter);
@@ -334,12 +389,17 @@ app.use('/api', apiRouter);
 // --- STATIC & SPA ---
 const findDist = () => {
     const paths = [
-        path.join(__dirname, '..', 'influencer-frontend', 'dist'),
         path.join(__dirname, 'dist'),
+        path.join(__dirname, '..', 'influencer-frontend', 'dist'),
+        path.join(__dirname, '..', 'dist'),
         path.join(process.cwd(), 'influencer-frontend', 'dist'),
         path.join(process.cwd(), 'dist')
     ];
-    for (const p of paths) { if (fs.existsSync(p) && fs.existsSync(path.join(p, 'index.html'))) return p; }
+    for (const p of paths) {
+        try {
+            if (fs.existsSync(p) && fs.existsSync(path.join(p, 'index.html'))) return p;
+        } catch (e) { /* skip */ }
+    }
     return null;
 };
 
@@ -356,8 +416,19 @@ if (distPath) {
         res.sendFile(path.join(distPath, 'index.html'));
     });
 } else {
-    app.get('/', (req, res) => res.status(200).send('<h1>Doringus Backend Ready</h1><p>Frontend dist not found.</p>'));
+    app.get('/', (req, res) => res.status(200).send('<h1>DO RING US Backend Ready</h1><p>Frontend dist not found.</p>'));
 }
+
+// --- GLOBAL ERROR HANDLER ---
+app.use((err, req, res, next) => {
+    console.error('[Uncaught Error]', err);
+    res.status(500).json({
+        success: false,
+        message: 'A critical server error occurred.',
+        error: err.message,
+        path: req.url
+    });
+});
 
 // --- BOOTSTRAP ---
 const start = async () => {
@@ -373,7 +444,7 @@ const start = async () => {
             await seed();
         }
 
-        app.listen(PORT, "0.0.0.0", () => {
+        app.listen(PORT, () => {
             console.log(`Server running on port ${PORT}`);
         });
     } catch (e) {
