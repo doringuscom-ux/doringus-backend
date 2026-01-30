@@ -19,11 +19,24 @@ const db = {
                 process.exit(1);
             }
 
+            // Global connection cache for Serverless/Lambda
+            if (global.mongoInstance && global.mongoInstance.isConnected) {
+                console.log('[Database] Using cached MongoDB connection');
+                const mongo = global.mongoInstance;
+                db.users = mongo.db.users;
+                db.influencers = mongo.db.influencers;
+                db.categories = mongo.db.categories;
+                db.inquiries = mongo.db.inquiries;
+                db.campaigns = mongo.db.campaigns;
+                return true;
+            }
+
             const mongo = new MongoAdapter(MONGO_URI);
             const connected = await mongo.connect();
 
             if (connected) {
                 console.log('Connected to MongoDB Atlas');
+                global.mongoInstance = mongo; // Cache it
                 db.users = mongo.db.users;
                 db.influencers = mongo.db.influencers;
                 db.categories = mongo.db.categories;

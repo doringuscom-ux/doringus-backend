@@ -430,6 +430,7 @@ app.use((err, req, res, next) => {
 });
 
 // --- BOOTSTRAP ---
+// --- BOOTSTRAP ---
 const start = async () => {
     try {
         console.log('[System] Initializing Database...');
@@ -452,5 +453,9 @@ const start = async () => {
     }
 };
 
+// Only run listen if executed directly (not imported as a module)
+if (require.main === module) {
+    start();
+}
 
-start();
+module.exports = app;
