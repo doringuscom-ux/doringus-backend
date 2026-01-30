@@ -1,6 +1,12 @@
 const mongoose = require('mongoose');
 
-const uri = process.env.MONGODB_URI || 'mongodb+srv://doringdb:doring%40123@cluster0.4xtwinz.mongodb.net/doringdb?retryWrites=true&w=majority';
+require('dotenv').config();
+const uri = process.env.MONGODB_URI;
+
+if (!uri) {
+    console.error('Error: MONGODB_URI is not defined in .env');
+    process.exit(1);
+}
 
 console.log('Testing connection to:', uri);
 

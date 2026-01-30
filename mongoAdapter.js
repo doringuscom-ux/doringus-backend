@@ -25,13 +25,33 @@ class MongoAdapter {
 
     async connect() {
         try {
-            console.log('[MongoAdapter] Connecting to Atlas...');
-            await mongoose.connect(this.uri, { serverSelectionTimeoutMS: 5000 });
+            // Mask password for logging
+            const safeUri = this.uri.replace(/:([^:@]+)@/, ':****@');
+            console.log(`[MongoAdapter] Connecting to Atlas: ${safeUri}`);
+
+            // Robust Connection Options for Windows/Atlas
+            const options = {
+                serverSelectionTimeoutMS: 5000, // Fail fast if no connection
+                socketTimeoutMS: 45000, // Close sockets after 45s of inactivity
+                family: 4 // Force IPv4 (Fixes nodejs/node#40537 on Windows 10/11)
+            };
+
+            await mongoose.connect(this.uri, options);
             this.isConnected = true;
             console.log('[MongoAdapter] Connected successfully');
             return true;
         } catch (e) {
-            console.error('[MongoAdapter] Connection failed:', e.message);
+            console.error('[MongoAdapter] Connection failed!');
+            console.error('Error Name:', e.name);
+            console.error('Error Message:', e.message);
+            console.error('Full Stack:', e.stack);
+
+            if (e.message.includes('ECONNREFUSED')) {
+                console.error('[MongoAdapter] HINT: DNS Lookup Failed.');
+                console.error('[MongoAdapter] 1. Check Internet Connection.');
+                console.error('[MongoAdapter] 2. Try changing PC DNS to 8.8.8.8.');
+                console.error('[MongoAdapter] 3. Ensure IP Whitelist on Atlas includes CURRENT IP (0.0.0.0/0).');
+            }
             return false;
         }
     }

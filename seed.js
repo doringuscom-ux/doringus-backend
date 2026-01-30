@@ -9,7 +9,13 @@ const Category = require('./models/Category');
 const Influencer = require('./models/Influencer');
 const User = require('./models/User');
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb+srv://doringdb:doring%40123@cluster0.4xtwinz.mongodb.net/doringdb?retryWrites=true&w=majority';
+require('dotenv').config();
+const MONGODB_URI = process.env.MONGODB_URI;
+
+if (!MONGODB_URI) {
+    console.error('Error: MONGODB_URI is not defined in .env');
+    process.exit(1);
+}
 
 mongoose.connect(MONGODB_URI)
     .then(() => {
