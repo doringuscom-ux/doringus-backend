@@ -100,6 +100,78 @@ apiRouter.get('/health', (req, res) => res.json({
     db: 'connected'
 }));
 
+// --- MAGIC SEED ROUTE (TEMPORARY) ---
+// Allows seeding via browser: http://localhost:5000/api/seed-db
+apiRouter.get('/seed-db', async (req, res) => {
+    const fs = require('fs');
+    const path = require('path');
+
+    try {
+        console.log('[API Seed] Starting manual seeding...');
+        const readJson = (file) => {
+            try {
+                const p = path.join(__dirname, 'data', file);
+                if (fs.existsSync(p)) return JSON.parse(fs.readFileSync(p, 'utf8'));
+            } catch (e) { console.error(e); }
+            return [];
+        };
+
+        // 1. Categories
+        const catCount = await db.categories.find({});
+        if (catCount.length === 0) {
+            const categories = readJson('categories.json');
+            // Fallback
+            const finalCats = categories.length > 0 ? categories : [
+                { name: 'Tech', image: 'https://placehold.co/400' },
+                { name: 'Fashion', image: 'https://placehold.co/400' }
+            ];
+            for (const c of finalCats) {
+                await db.categories.create({ name: c.label || c.name, image: c.image });
+            }
+            console.log(`[API Seed] Seeded ${finalCats.length} categories`);
+        } else {
+            console.log(`[API Seed] Categories exist (${catCount.length}). Skipping.`);
+        }
+
+        // 2. Influencers
+        const infCount = await db.influencers.find({});
+        if (infCount.length === 0) {
+            const influencers = readJson('influencers.json');
+            for (const inf of influencers) {
+                // Ensure joinedDate
+                if (!inf.joinedDate) inf.joinedDate = new Date().toISOString().split('T')[0];
+                // Hash Password '123456' if needed
+                if (!inf.password || inf.password.length < 50) {
+                    inf.password = await bcrypt.hash('123456', 10);
+                }
+                await db.influencers.create(inf);
+            }
+            console.log(`[API Seed] Seeded ${influencers.length} influencers`);
+        } else {
+            console.log(`[API Seed] Influencers exist (${infCount.length}). Skipping.`);
+        }
+
+        res.json({ success: true, message: 'Database seeded successfully! Refresh your frontend.' });
+
+    } catch (e) {
+        console.error('[API Seed] Error:', e);
+        res.status(500).json({ error: e.message, stack: e.stack });
+    }
+});
+
+// --- DEBUG ROUTE ---
+apiRouter.get('/debug/status', async (req, res) => {
+    try {
+        const catCount = (await db.categories.find({})).length;
+        const infCount = (await db.influencers.find({})).length;
+        res.json({
+            status: 'ok',
+            db: MONGODB_URI.includes('cluster0') ? 'Connected' : 'Disconnected',
+            counts: { categories: catCount, influencers: infCount }
+        });
+    } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 apiRouter.get('/', (req, res) => {
     res.json({
         status: 'online',
@@ -133,12 +205,44 @@ apiRouter.post('/auth/register', async (req, res) => {
     } catch (e) { res.status(500).json({ message: 'Server error' }); }
 });
 
+// --- HELPER: READ JSON SAFE ---
+const fs = require('fs');
+const path = require('path');
+const readJson = (file) => {
+    try {
+        const p = path.join(__dirname, 'data', file);
+        if (fs.existsSync(p)) return JSON.parse(fs.readFileSync(p, 'utf8'));
+    } catch (e) { console.error('[Data Read Error]', e.message); }
+    return [];
+};
+
 // --- CATEGORY ROUTES ---
 apiRouter.get('/categories', async (req, res) => {
     try {
-        const list = await db.categories.find({});
+        let list = await db.categories.find({});
+
+        // JUST-IN-TIME SEEDING
+        if (list.length === 0) {
+            console.log('[JIT Seed] Categories empty. Seeding on-the-fly...');
+            const categories = readJson('categories.json');
+            const data = categories.length > 0 ? categories : [
+                { name: 'Tech', image: 'https://placehold.co/400' },
+                { name: 'Fashion', image: 'https://placehold.co/400' }
+            ];
+
+            // Transform and Insert
+            for (const c of data) {
+                await db.categories.create({ name: c.label || c.name, image: c.image });
+            }
+            list = await db.categories.find({}); // Re-fetch
+        }
+
+        console.log(`[API] Serving ${list.length} categories`);
         res.json(list);
-    } catch (e) { res.json([]); }
+    } catch (e) {
+        console.error('[API Error] /categories:', e);
+        res.status(500).json({ error: 'Failed to fetch categories' });
+    }
 });
 
 apiRouter.post('/categories', authenticate, isAdmin, async (req, res) => {
@@ -165,9 +269,44 @@ apiRouter.delete('/categories/:id', authenticate, isAdmin, async (req, res) => {
 // --- INFLUENCER ROUTES ---
 apiRouter.get('/influencers', async (req, res) => {
     try {
-        const list = await db.influencers.find({});
+        let list = await db.influencers.find({});
+
+        // JUST-IN-TIME SEEDING
+        if (list.length === 0) {
+            console.log('[JIT Seed] Influencers empty. Seeding on-the-fly...');
+            const influencers = readJson('influencers.json');
+            for (const inf of influencers) {
+                // Ensure joinedDate
+                if (!inf.joinedDate) inf.joinedDate = new Date().toISOString().split('T')[0];
+                // Hash Password '123456' if needed
+                if (!inf.password || inf.password.length < 50) {
+                    inf.password = await bcrypt.hash('123456', 10);
+                }
+                // FORCE APPROVED STATUS for JIT Seeding (Fixes Frontend Filtering)
+                inf.status = 'Approved';
+                await db.influencers.create(inf);
+            }
+            list = await db.influencers.find({}); // Re-fetch
+        }
+
+        console.log(`[API] Serving ${list.length} influencers`);
         res.json(list.map(({ password, ...rest }) => rest));
-    } catch (e) { res.json([]); }
+    } catch (e) {
+        console.error('[API Error] /influencers:', e);
+        res.status(500).json({ error: 'Failed to fetch influencers' });
+    }
+});
+
+// --- DEBUG RESET ROUTE ---
+apiRouter.get('/debug/reset', async (req, res) => {
+    try {
+        await db.categories.deleteMany({});
+        await db.influencers.deleteMany({});
+        await autoSeed(); // Uses the internal autoSeed which calls readJson
+        res.json({ success: true, message: 'Database reset and re-seeded successfully with APPROVED influencers.' });
+    } catch (e) {
+        res.status(500).json({ error: e.message });
+    }
 });
 
 apiRouter.get('/influencers/:username', async (req, res) => {
@@ -335,20 +474,95 @@ app.use((err, req, res, next) => {
     });
 });
 
+// --- AUTO-SEED HELPER ---
+const autoSeed = async () => {
+    try {
+        const fs = require('fs');
+        const path = require('path');
+        console.log('[Auto-Seed] Checking database status...');
+
+        const readJson = (file) => {
+            try {
+                const p = path.join(__dirname, 'data', file);
+                if (fs.existsSync(p)) return JSON.parse(fs.readFileSync(p, 'utf8'));
+            } catch (e) { console.error('[Auto-Seed] File read error:', e.message); }
+            return [];
+        };
+
+        // 1. Categories
+        const catCount = (await db.categories.find({})).length;
+        if (catCount === 0) {
+            console.log('[Auto-Seed] Categories empty. Seeding...');
+            const categories = readJson('categories.json');
+            const finalCats = categories.length > 0 ? categories : [
+                { name: 'Tech', image: 'https://placehold.co/400' },
+                { name: 'Fashion', image: 'https://placehold.co/400' }
+            ];
+            for (const c of finalCats) {
+                await db.categories.create({ name: c.label || c.name, image: c.image });
+            }
+            console.log(`[Auto-Seed] Seeded ${finalCats.length} categories.`);
+        }
+
+        // 2. Influencers
+        const infCount = (await db.influencers.find({})).length;
+        if (infCount === 0) {
+            console.log('[Auto-Seed] Influencers empty. Seeding...');
+            const influencers = readJson('influencers.json');
+            for (const inf of influencers) {
+                if (!inf.joinedDate) inf.joinedDate = new Date().toISOString().split('T')[0];
+                if (!inf.password || inf.password.length < 50) {
+                    inf.password = await bcrypt.hash('123456', 10);
+                }
+                await db.influencers.create(inf);
+            }
+            console.log(`[Auto-Seed] Seeded ${influencers.length} influencers.`);
+        }
+
+    } catch (e) {
+        console.error('[Auto-Seed] Failed:', e.message);
+    }
+};
+
 // --- BOOTSTRAP ---
 const start = async () => {
+    let dbStatus = 'Pending';
+    let seedStatus = 'Pending';
+
+    // 1. Attempt Database Connection (Non-Blocking)
     try {
         console.log('[System] Initializing Database...');
         await db.init();
+        dbStatus = 'Connected';
 
+        // 2. Attempt Auto-Seed
+        try {
+            await autoSeed();
+            seedStatus = 'Seeded';
+        } catch (seedErr) {
+            console.error('[System] Auto-Seed Warning:', seedErr.message);
+            seedStatus = 'Failed';
+        }
+    } catch (dbErr) {
+        console.error('[System] CRITICAL DB ERROR: Could not connect to MongoDB.');
+        console.error('[System] Error Details:', dbErr.message);
+        console.error('[System] Server will start in OFFLINE MODE to allow debugging.');
+        dbStatus = 'Offline/Error';
+    }
+
+    // 3. Start HTTP Server (Always)
+    try {
         app.listen(PORT, () => {
-            console.log(`[System] Server running on port ${PORT}`);
-            console.log(`[System] Environment: ${process.env.NODE_ENV || 'development'}`);
-            console.log(`[System] Client URL: ${CLIENT_URL}`);
-            console.log(`[System] Database: Connected to Atlas (${MONGODB_URI.includes('doringdb') ? 'Production DB' : 'Check URI'})`);
+            console.log('\n==================================================');
+            console.log(`🚀  SERVER RUNNING ON LOCALHOST:${PORT}`);
+            console.log(`🌟  MODE: ${process.env.NODE_ENV || 'development'}`);
+            console.log(`💾  DATABASE: ${dbStatus}`);
+            console.log(`🌱  SEEDING: ${seedStatus}`);
+            console.log(`🔗  CLIENT URL: ${CLIENT_URL}`);
+            console.log('==================================================\n');
         });
-    } catch (e) {
-        console.error('[System] CRITICAL STARTUP ERROR:', e.message);
+    } catch (serverErr) {
+        console.error('[System] FAILED TO BIND PORT:', serverErr.message);
         process.exit(1);
     }
 };

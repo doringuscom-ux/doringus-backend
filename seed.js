@@ -17,7 +17,13 @@ if (!MONGODB_URI) {
     process.exit(1);
 }
 
-mongoose.connect(MONGODB_URI)
+// Robust options for Windows/Atlas (Same as mongoAdapter.js)
+const options = {
+    serverSelectionTimeoutMS: 5000,
+    family: 4 // Force IPv4 to fix Windows 10/11 DNS issues
+};
+
+mongoose.connect(MONGODB_URI, options)
     .then(() => {
         console.log('[Seed] Connected to MongoDB');
         seedData();
@@ -41,68 +47,72 @@ const readJson = (file) => {
 
 const seedData = async () => {
     try {
+        console.log('[Seed] Starting Data Seeding...');
+
         // 1. Categories
-        const categories = readJson('categories.json');
-        if (categories.length > 0) {
-            await Category.deleteMany({});
-            console.log('[Seed] Cleared Categories');
-            // Ensure schema compatibility
-            const validCategories = categories.map(c => ({
+        const categoryCount = await Category.countDocuments();
+        if (categoryCount === 0) {
+            console.log('[Seed] Categories collection is empty. Seeding...');
+            const categories = readJson('categories.json');
+
+            // Fallback if file missing
+            const finalCategories = categories.length > 0 ? categories : [
+                { name: 'Tech', image: 'https://res.cloudinary.com/demo/image/upload/v1312461204/sample.jpg' },
+                { name: 'Fashion', image: 'https://res.cloudinary.com/demo/image/upload/v1312461204/sample.jpg' },
+                { name: 'Lifestyle', image: 'https://res.cloudinary.com/demo/image/upload/v1312461204/sample.jpg' }
+            ];
+
+            const validCategories = finalCategories.map(c => ({
                 ...c,
-                name: c.label || c.name // Map label to name as per schema
+                name: c.label || c.name
             }));
+
             await Category.insertMany(validCategories);
-            console.log(`[Seed] Seeded ${validCategories.length} Categories`);
+            console.log(`[Seed] Successfully seeded ${validCategories.length} Categories.`);
+        } else {
+            console.log(`[Seed] Categories already exist (${categoryCount}). Skipping.`);
         }
 
         // 2. Influencers
-        const influencers = readJson('influencers.json');
-        if (influencers.length > 0) {
-            await Influencer.deleteMany({});
-            console.log('[Seed] Cleared Influencers');
-            // Fix passwords if they are plain text or not present
-            // We'll leave the hash as is if it looks like a hash, otherwise hash "123456"
-            // Actually better to just reset passwords to something known?
-            // The JSON might contain hashed passwords from previous usage.
-            // Let's assume they are valid or just re-hash '123456' for all for safety?
-            // User said "Register and Login not working", so fresh users might be better.
-            // But let's try to preserve.
-            await Influencer.insertMany(influencers);
-            console.log(`[Seed] Seeded ${influencers.length} Influencers`);
+        const influencerCount = await Influencer.countDocuments();
+        if (influencerCount === 0) {
+            console.log('[Seed] Influencers collection is empty. Seeding...');
+            const influencers = readJson('influencers.json');
+
+            if (influencers.length > 0) {
+                await Influencer.insertMany(influencers);
+                console.log(`[Seed] Successfully seeded ${influencers.length} Influencers.`);
+            } else {
+                console.log('[Seed] Warning: influencers.json is empty or missing. No influencers seeded.');
+            }
+        } else {
+            console.log(`[Seed] Influencers already exist (${influencerCount}). Skipping.`);
         }
 
-        // 3. Users (Admins)
-        // Hardcode a reliable admin if data/users.json is messy
-        const users = readJson('users.json');
-        await User.deleteMany({});
-        console.log('[Seed] Cleared Users');
+        // 3. User (SuperAdmin)
+        const adminRegex = /AddaLegend_9/i;
+        const adminExists = await User.findOne({ username: adminRegex });
 
-        // Always add a clear Admin
-        const salt = await bcrypt.genSalt(10);
-        const hash = await bcrypt.hash('S0c!al@ddA#97', salt); // Default password
+        if (!adminExists) {
+            const salt = await bcrypt.genSalt(10);
+            const hash = await bcrypt.hash('S0c!al@ddA#97', salt);
 
-        const superAdmin = {
-            username: 'AddaLegend_9',
-            password: hash,
-            role: 'superadmin',
-            email: 'admin@doringus.com'
-        };
-
-        await User.create(superAdmin);
-        console.log('[Seed] Created SuperAdmin (AddaLegend_9)');
-
-        if (users.length > 0) {
-            // careful with duplicate keys
-            const safeUsers = users.filter(u => u.username !== 'AddaLegend_9');
-            if (safeUsers.length > 0) await User.insertMany(safeUsers);
-            console.log(`[Seed] Seeded ${safeUsers.length} other users`);
+            await User.create({
+                username: 'AddaLegend_9',
+                password: hash,
+                role: 'superadmin',
+                email: 'admin@doringus.com'
+            });
+            console.log('[Seed] Created SuperAdmin: AddaLegend_9');
+        } else {
+            console.log('[Seed] SuperAdmin already exists. Skipping.');
         }
 
-        console.log('[Seed] Complete. Exiting...');
+        console.log('[Seed] Database population complete.');
         process.exit(0);
 
     } catch (e) {
-        console.error('[Seed] Error:', e);
+        console.error('[Seed] Critical Error:', e);
         process.exit(1);
     }
 };

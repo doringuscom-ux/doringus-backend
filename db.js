@@ -36,10 +36,9 @@ const db = {
             global.mongoInstance = mongo; // Cache it
             db._bindModels(mongo);
             return true;
-        } else {
             console.error('[Database] CRITICAL ERROR: Failed to connect to MongoDB Atlas.');
             console.error('[Database] Check your connection string and IP whitelist.');
-            process.exit(1);
+            throw new Error('Database Connection Failed'); // Throw instead of exit
         }
     },
 
