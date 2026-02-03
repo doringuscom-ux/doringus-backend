@@ -502,32 +502,6 @@ apiRouter.post('/upload', (req, res) => {
 
 app.use('/api', apiRouter);
 
-// ----------------------------------------------------
-//     STATIC SERVING + SPA FALLBACK (CRITICAL FIX)
-// ----------------------------------------------------
-
-// 1. Serve Static Files from 'dist' and 'uploads'
-const distPath = path.join(__dirname, '../influencer-frontend/dist');
-const uploadsPath = path.join(__dirname, 'uploads');
-
-app.use(express.static(distPath));
-app.use('/uploads', express.static(uploadsPath));
-
-// 2. Catch-All Route for SPA (Must be AFTER API routes)
-app.get(/.*/, (req, res) => {
-    if (req.url.startsWith('/api')) {
-        return res.status(404).json({ message: 'API Route Not Found' });
-    }
-    const indexPath = path.join(distPath, 'index.html');
-    if (fs.existsSync(indexPath)) {
-        res.sendFile(indexPath);
-    } else {
-        res.status(404).send('Frontend build (dist) not found. Please run "vite build".');
-    }
-});
-
-// ----------------------------------------------------
-
 // --- GLOBAL ERROR HANDLER ---
 app.use((err, req, res, next) => {
     console.error('[Uncaught Error]', err);
@@ -604,7 +578,6 @@ app.get("/", (req, res) => {
         timestamp: new Date().toISOString()
     });
 });
-产
 
 // --- BOOTSTRAP ---
 const start = async () => {
