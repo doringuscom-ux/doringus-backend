@@ -51,10 +51,8 @@ app.use(compression());
 
 
 const allowedOrigins = [
-    "http://localhost:5173",
-    "http://localhost:3000",
-    "https://doringus.com",
-    "https://www.doringus.com"
+    process.env.CLIENT_URL,
+    "https://doringus-frontend.onrender.com"
 ];
 
 app.use(
@@ -66,12 +64,12 @@ app.use(
             if (allowedOrigins.includes(origin)) {
                 callback(null, true);
             } else {
-                callback(new Error("Not allowed by CORS"));
+                callback(new Error("CORS not allowed"));
             }
         },
         credentials: true,
         methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-        allowedHeaders: ["Content-Type", "Authorization"]
+        allowedHeaders: ["Content-Type", "Authorization"],
     })
 );
 
@@ -600,7 +598,10 @@ const autoSeed = async () => {
     }
 };
 app.get("/", (req, res) => {
-    res.json({ status: "API running" });
+    res.status(200).json({
+        success: true,
+        message: "Doringus Backend is Live 🚀"
+    });
 });
 
 // --- BOOTSTRAP ---
