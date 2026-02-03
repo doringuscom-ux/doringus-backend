@@ -51,6 +51,8 @@ app.use(compression());
 
 
 const allowedOrigins = [
+    "https://doringus.com",
+    "https://www.doringus.com",
     "https://doringus-frontend.onrender.com"
 ];
 
@@ -576,6 +578,13 @@ app.get("/", (req, res) => {
         success: true,
         message: "Doringus Backend is Live 🚀",
         timestamp: new Date().toISOString()
+    });
+});
+
+app.get("/", (req, res) => {
+    res.status(200).json({
+        success: true,
+        message: "Doringus Backend API is Live 🚀"
     });
 });
 
