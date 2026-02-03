@@ -51,7 +51,6 @@ app.use(compression());
 
 
 const allowedOrigins = [
-    process.env.CLIENT_URL,
     "https://doringus-frontend.onrender.com"
 ];
 
@@ -64,7 +63,8 @@ app.use(
             if (allowedOrigins.includes(origin)) {
                 callback(null, true);
             } else {
-                callback(new Error("CORS not allowed"));
+                console.error(`[CORS] Blocked request from: ${origin}`);
+                callback(new Error("CORS not allowed by security policy"));
             }
         },
         credentials: true,
@@ -600,9 +600,11 @@ const autoSeed = async () => {
 app.get("/", (req, res) => {
     res.status(200).json({
         success: true,
-        message: "Doringus Backend is Live 🚀"
+        message: "Doringus Backend is Live 🚀",
+        timestamp: new Date().toISOString()
     });
 });
+产
 
 // --- BOOTSTRAP ---
 const start = async () => {
