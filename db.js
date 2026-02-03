@@ -1,4 +1,6 @@
-const MongoAdapter = require('./mongoAdapter');
+import MongoAdapter from './mongoAdapter.js';
+import dotenv from 'dotenv';
+dotenv.config();
 
 // Configuration
 const MONGODB_URI = process.env.MONGODB_URI;
@@ -10,6 +12,7 @@ const db = {
     categories: null,
     inquiries: null,
     campaigns: null,
+    isConnected: false,
 
     init: async () => {
         // 1. Validate Env
@@ -23,6 +26,7 @@ const db = {
         if (global.mongoInstance && global.mongoInstance.isConnected) {
             console.log('[Database] Using cached MongoDB connection');
             db._bindModels(global.mongoInstance);
+            db.isConnected = true;
             return true;
         }
 
@@ -35,10 +39,13 @@ const db = {
             console.log('[Database] Connected successfully to MongoDB Atlas');
             global.mongoInstance = mongo; // Cache it
             db._bindModels(mongo);
+            db.isConnected = true;
             return true;
+        } else {
             console.error('[Database] CRITICAL ERROR: Failed to connect to MongoDB Atlas.');
             console.error('[Database] Check your connection string and IP whitelist.');
-            throw new Error('Database Connection Failed'); // Throw instead of exit
+            db.isConnected = false;
+            throw new Error('Database Connection Failed');
         }
     },
 
@@ -52,5 +59,4 @@ const db = {
     }
 };
 
-module.exports = db;
-
+export default db;

@@ -1,7 +1,8 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const InfluencerSchema = new mongoose.Schema({
     // Auth & Identity
+    id: { type: String }, // support migration/seed IDs
     username: { type: String, required: true, unique: true },
     email: { type: String, unique: true },
     password: { type: String, required: true },
@@ -50,4 +51,4 @@ InfluencerSchema.set('toJSON', {
     }
 });
 
-module.exports = mongoose.model('Influencer', InfluencerSchema);
+export default mongoose.model('Influencer', InfluencerSchema);

@@ -1,9 +1,11 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const CategorySchema = new mongoose.Schema({
+    id: String, // Explicitly support the ID string from JSON
     name: String,
+    label: String, // Ensure label field is present
     status: { type: String, default: 'Active' },
-    image: String, // Ensure image field is present if used
+    image: String,
     // Flexible schema for other props
 }, { strict: false, timestamps: true });
 
@@ -15,4 +17,4 @@ CategorySchema.set('toJSON', {
     }
 });
 
-module.exports = mongoose.model('Category', CategorySchema);
+export default mongoose.model('Category', CategorySchema);

@@ -1,5 +1,25 @@
 /* eslint-disable no-console */
-require('dotenv').config();
+import dotenv from 'dotenv';
+import express from 'express';
+import cors from 'cors';
+import bodyParser from 'body-parser';
+import jwt from 'jsonwebtoken';
+import bcrypt from 'bcryptjs';
+import compression from 'compression';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+import multer from 'multer';
+
+// Internal Imports
+import db from './db.js';
+import { storage } from './config/cloudinary.js';
+
+dotenv.config();
+
+// --- ESM PATH FIX ---
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // --- STRICT ENV VALIDATION ---
 const requiredEnv = [
@@ -18,14 +38,6 @@ if (missingEnv.length > 0) {
     process.exit(1);
 }
 
-const express = require('express');
-const cors = require('cors');
-const bodyParser = require('body-parser');
-const jwt = require('jsonwebtoken');
-const bcrypt = require('bcryptjs');
-const compression = require('compression');
-const db = require('./db');
-
 // Config
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -36,36 +48,41 @@ const CLIENT_URL = process.env.CLIENT_URL;
 // --- MIDDLEWARE ---
 app.use(compression());
 
-// Strict CORS
+
+
 const allowedOrigins = [
-    CLIENT_URL, // Production Frontend
-    'http://localhost:5173', // Local Vite
-    'http://localhost:3000'  // Local React (Backup)
-].filter(Boolean); // Remove undefined/null
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "https://doringus.com",
+    "https://www.doringus.com"
+];
 
-app.use(cors({
-    origin: function (origin, callback) {
-        // Allow mobile/curl (no origin)
-        if (!origin) return callback(null, true);
+app.use(
+    cors({
+        origin: function (origin, callback) {
+            // allow requests with no origin (Postman, server-to-server)
+            if (!origin) return callback(null, true);
 
-        if (allowedOrigins.includes(origin) || origin.endsWith('.onrender.com') || origin.endsWith('.vercel.app')) {
-            callback(null, true);
-        } else {
-            console.log(`[CORS Blocked] Origin: ${origin} is not in Allowed List:`, allowedOrigins);
-            callback(new Error('Not allowed by CORS'));
-        }
-    },
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Cache-Control', 'X-Requested-With']
-}));
+            if (allowedOrigins.includes(origin)) {
+                callback(null, true);
+            } else {
+                callback(new Error("Not allowed by CORS"));
+            }
+        },
+        credentials: true,
+        methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        allowedHeaders: ["Content-Type", "Authorization"]
+    })
+);
 
 app.use(bodyParser.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// Global Logging
+// Global Logging (Filtered for API only to reduce clutter/latency)
 app.use((req, res, next) => {
-    console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`);
+    if (req.originalUrl.startsWith('/api')) {
+        console.log(`[API] ${req.method} ${req.originalUrl}`);
+    }
     next();
 });
 
@@ -95,17 +112,29 @@ const apiRouter = express.Router();
 // Health Check
 apiRouter.get('/health', (req, res) => res.json({
     status: 'ok',
-    version: '3.1.0-prod',
+    version: '3.1.0-prod-ESM-Stability',
     timestamp: new Date().toISOString(),
-    db: 'connected'
+    db: db.isConnected ? 'connected' : 'offline'
 }));
+
+// Database connection check middleware
+const checkDb = (req, res, next) => {
+    if (!db.isConnected) {
+        return res.status(503).json({
+            success: false,
+            message: 'Database is currently offline. Please try again later.',
+            status: 'offline'
+        });
+    }
+    next();
+};
+
+// Apply connection check to all subsequent API routes
+apiRouter.use(checkDb);
 
 // --- MAGIC SEED ROUTE (TEMPORARY) ---
 // Allows seeding via browser: http://localhost:5000/api/seed-db
 apiRouter.get('/seed-db', async (req, res) => {
-    const fs = require('fs');
-    const path = require('path');
-
     try {
         console.log('[API Seed] Starting manual seeding...');
         const readJson = (file) => {
@@ -117,25 +146,32 @@ apiRouter.get('/seed-db', async (req, res) => {
         };
 
         // 1. Categories
-        const catCount = await db.categories.find({});
-        if (catCount.length === 0) {
+        const catCount = await db.categories.countDocuments({});
+        if (catCount === 0) {
             const categories = readJson('categories.json');
             // Fallback
             const finalCats = categories.length > 0 ? categories : [
-                { name: 'Tech', image: 'https://placehold.co/400' },
-                { name: 'Fashion', image: 'https://placehold.co/400' }
+                { id: 'tech', label: 'Tech', name: 'Tech', image: 'https://placehold.co/400' },
+                { id: 'fashion', label: 'Fashion', name: 'Fashion', image: 'https://placehold.co/400' }
             ];
             for (const c of finalCats) {
-                await db.categories.create({ name: c.label || c.name, image: c.image });
+                // Ensure BOTH name and label exist for safety
+                await db.categories.create({
+                    ...c, // Preserve all JSON fields (icon, status, etc)
+                    id: c.id,
+                    label: c.label || c.name,
+                    name: c.name || c.label,
+                    image: c.image
+                });
             }
             console.log(`[API Seed] Seeded ${finalCats.length} categories`);
         } else {
-            console.log(`[API Seed] Categories exist (${catCount.length}). Skipping.`);
+            console.log(`[API Seed] Categories exist. Skipping.`);
         }
 
         // 2. Influencers
-        const infCount = await db.influencers.find({});
-        if (infCount.length === 0) {
+        const infCount = await db.influencers.countDocuments({});
+        if (infCount === 0) {
             const influencers = readJson('influencers.json');
             for (const inf of influencers) {
                 // Ensure joinedDate
@@ -144,11 +180,13 @@ apiRouter.get('/seed-db', async (req, res) => {
                 if (!inf.password || inf.password.length < 50) {
                     inf.password = await bcrypt.hash('123456', 10);
                 }
+                // FORCE APPROVED STATUS for Seeding
+                inf.status = 'Approved';
                 await db.influencers.create(inf);
             }
             console.log(`[API Seed] Seeded ${influencers.length} influencers`);
         } else {
-            console.log(`[API Seed] Influencers exist (${infCount.length}). Skipping.`);
+            console.log(`[API Seed] Influencers exist (${infCount}). Skipping.`);
         }
 
         res.json({ success: true, message: 'Database seeded successfully! Refresh your frontend.' });
@@ -162,12 +200,14 @@ apiRouter.get('/seed-db', async (req, res) => {
 // --- DEBUG ROUTE ---
 apiRouter.get('/debug/status', async (req, res) => {
     try {
-        const catCount = (await db.categories.find({})).length;
-        const infCount = (await db.influencers.find({})).length;
+        const categories = await db.categories.find({});
+        const influencers = await db.influencers.find({});
         res.json({
             status: 'ok',
-            db: MONGODB_URI.includes('cluster0') ? 'Connected' : 'Disconnected',
-            counts: { categories: catCount, influencers: infCount }
+            db: process.env.MONGODB_URI.includes('cluster0') ? 'Connected' : 'Disconnected',
+            counts: { categories: categories.length, influencers: influencers.length },
+            sample_category: categories[0] || null,
+            sample_influencer_status: influencers[0]?.status || null
         });
     } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -176,13 +216,13 @@ apiRouter.get('/', (req, res) => {
     res.json({
         status: 'online',
         message: 'DO RING US API (Production)',
-        version: '3.1.0',
+        version: '3.1.0-ESM',
     });
 });
 
 
 // --- AUTH ROUTES ---
-apiRouter.post('/auth/login', async (req, res) => {
+apiRouter.post(['/auth/login', '/admin/login'], async (req, res) => {
     const { username, password } = req.body;
     try {
         const user = await db.users.findOne({ username });
@@ -206,8 +246,6 @@ apiRouter.post('/auth/register', async (req, res) => {
 });
 
 // --- HELPER: READ JSON SAFE ---
-const fs = require('fs');
-const path = require('path');
 const readJson = (file) => {
     try {
         const p = path.join(__dirname, 'data', file);
@@ -226,13 +264,19 @@ apiRouter.get('/categories', async (req, res) => {
             console.log('[JIT Seed] Categories empty. Seeding on-the-fly...');
             const categories = readJson('categories.json');
             const data = categories.length > 0 ? categories : [
-                { name: 'Tech', image: 'https://placehold.co/400' },
-                { name: 'Fashion', image: 'https://placehold.co/400' }
+                { id: 'tech', label: 'Tech', name: 'Tech', image: 'https://placehold.co/400' },
+                { id: 'fashion', label: 'Fashion', name: 'Fashion', image: 'https://placehold.co/400' }
             ];
 
             // Transform and Insert
             for (const c of data) {
-                await db.categories.create({ name: c.label || c.name, image: c.image });
+                await db.categories.create({
+                    ...c,
+                    id: c.id,
+                    label: c.label || c.name,
+                    name: c.name || c.label,
+                    image: c.image
+                });
             }
             list = await db.categories.find({}); // Re-fetch
         }
@@ -432,9 +476,6 @@ apiRouter.delete('/campaigns/:id', authenticate, isAdmin, async (req, res) => {
 });
 
 // --- FILE UPLOAD (Cloudinary) ---
-const multer = require('multer');
-const { storage } = require('./config/cloudinary');
-
 const upload = multer({
     storage,
     limits: { fileSize: 30 * 1024 * 1024 } // 30MB Limit
@@ -463,6 +504,32 @@ apiRouter.post('/upload', (req, res) => {
 
 app.use('/api', apiRouter);
 
+// ----------------------------------------------------
+//     STATIC SERVING + SPA FALLBACK (CRITICAL FIX)
+// ----------------------------------------------------
+
+// 1. Serve Static Files from 'dist' and 'uploads'
+const distPath = path.join(__dirname, '../influencer-frontend/dist');
+const uploadsPath = path.join(__dirname, 'uploads');
+
+app.use(express.static(distPath));
+app.use('/uploads', express.static(uploadsPath));
+
+// 2. Catch-All Route for SPA (Must be AFTER API routes)
+app.get(/.*/, (req, res) => {
+    if (req.url.startsWith('/api')) {
+        return res.status(404).json({ message: 'API Route Not Found' });
+    }
+    const indexPath = path.join(distPath, 'index.html');
+    if (fs.existsSync(indexPath)) {
+        res.sendFile(indexPath);
+    } else {
+        res.status(404).send('Frontend build (dist) not found. Please run "vite build".');
+    }
+});
+
+// ----------------------------------------------------
+
 // --- GLOBAL ERROR HANDLER ---
 app.use((err, req, res, next) => {
     console.error('[Uncaught Error]', err);
@@ -477,10 +544,11 @@ app.use((err, req, res, next) => {
 // --- AUTO-SEED HELPER ---
 const autoSeed = async () => {
     try {
-        const fs = require('fs');
-        const path = require('path');
+        if (!db.isConnected) {
+            console.log('[Auto-Seed] Database offline. Skipping seeding.');
+            return;
+        }
         console.log('[Auto-Seed] Checking database status...');
-
         const readJson = (file) => {
             try {
                 const p = path.join(__dirname, 'data', file);
@@ -490,22 +558,28 @@ const autoSeed = async () => {
         };
 
         // 1. Categories
-        const catCount = (await db.categories.find({})).length;
+        const catCount = await db.categories.countDocuments({});
         if (catCount === 0) {
             console.log('[Auto-Seed] Categories empty. Seeding...');
             const categories = readJson('categories.json');
             const finalCats = categories.length > 0 ? categories : [
-                { name: 'Tech', image: 'https://placehold.co/400' },
-                { name: 'Fashion', image: 'https://placehold.co/400' }
+                { id: 'tech', label: 'Tech', name: 'Tech', image: 'https://placehold.co/400' },
+                { id: 'fashion', label: 'Fashion', name: 'Fashion', image: 'https://placehold.co/400' }
             ];
             for (const c of finalCats) {
-                await db.categories.create({ name: c.label || c.name, image: c.image });
+                await db.categories.create({
+                    ...c,
+                    id: c.id,
+                    label: c.label || c.name,
+                    name: c.name || c.label,
+                    image: c.image
+                });
             }
             console.log(`[Auto-Seed] Seeded ${finalCats.length} categories.`);
         }
 
         // 2. Influencers
-        const infCount = (await db.influencers.find({})).length;
+        const infCount = await db.influencers.countDocuments({});
         if (infCount === 0) {
             console.log('[Auto-Seed] Influencers empty. Seeding...');
             const influencers = readJson('influencers.json');
@@ -514,6 +588,8 @@ const autoSeed = async () => {
                 if (!inf.password || inf.password.length < 50) {
                     inf.password = await bcrypt.hash('123456', 10);
                 }
+                // FORCE APPROVED Status for Auto-Seed
+                inf.status = 'Approved';
                 await db.influencers.create(inf);
             }
             console.log(`[Auto-Seed] Seeded ${influencers.length} influencers.`);
@@ -523,6 +599,9 @@ const autoSeed = async () => {
         console.error('[Auto-Seed] Failed:', e.message);
     }
 };
+app.get("/", (req, res) => {
+    res.json({ status: "API running" });
+});
 
 // --- BOOTSTRAP ---
 const start = async () => {
@@ -544,8 +623,7 @@ const start = async () => {
             seedStatus = 'Failed';
         }
     } catch (dbErr) {
-        console.error('[System] CRITICAL DB ERROR: Could not connect to MongoDB.');
-        console.error('[System] Error Details:', dbErr.message);
+        console.error('[System] CRITICAL DB ERROR: Could not connect to MongoDB.', dbErr);
         console.error('[System] Server will start in OFFLINE MODE to allow debugging.');
         dbStatus = 'Offline/Error';
     }
@@ -567,9 +645,6 @@ const start = async () => {
     }
 };
 
-// Only run listen if executed directly (not imported as a module for Vercel)
-if (require.main === module) {
-    start();
-}
+start();
 
-module.exports = app;
+export default app;

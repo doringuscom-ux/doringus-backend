@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const CampaignSchema = new mongoose.Schema({
     name: String,
@@ -14,4 +14,4 @@ CampaignSchema.set('toJSON', {
     }
 });
 
-module.exports = mongoose.model('Campaign', CampaignSchema);
+export default mongoose.model('Campaign', CampaignSchema);

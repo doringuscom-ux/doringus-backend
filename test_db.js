@@ -1,27 +1,20 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
+import dotenv from 'dotenv';
+dotenv.config();
 
-require('dotenv').config();
 const uri = process.env.MONGODB_URI;
 
 if (!uri) {
-    console.error('Error: MONGODB_URI is not defined in .env');
+    console.error('MONGODB_URI not found in env');
     process.exit(1);
 }
 
-console.log('Testing connection to:', uri);
-
-mongoose.connect(uri, {
-    serverSelectionTimeoutMS: 5000 // 5 seconds timeout
-})
+mongoose.connect(uri)
     .then(() => {
-        console.log('SUCCESS: Connected to MongoDB!');
+        console.log('Connection successful');
         process.exit(0);
     })
     .catch(err => {
-        console.error('ERROR: Could not connect to MongoDB');
-        console.error('Reason:', err.message);
-        if (err.message.includes('ETIMEDOUT')) {
-            console.error('HINT: Check your IP Whitelist in MongoDB Atlas Security -> Network Access.');
-        }
+        console.error('Connection failed:', err);
         process.exit(1);
     });

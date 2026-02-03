@@ -1,14 +1,14 @@
 /* eslint-disable no-console */
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 // Models
-const User = require('./models/User');
-const Influencer = require('./models/Influencer');
-const Category = require('./models/Category');
-const Inquiry = require('./models/Inquiry');
-const Campaign = require('./models/Campaign');
+import User from './models/User.js';
+import Influencer from './models/Influencer.js';
+import Category from './models/Category.js';
+import Inquiry from './models/Inquiry.js';
+import Campaign from './models/Campaign.js';
 
-class MongoAdapter {
+export default class MongoAdapter {
     constructor(uri) {
         this.uri = uri;
         this.isConnected = false;
@@ -24,35 +24,40 @@ class MongoAdapter {
     }
 
     async connect() {
-        try {
-            // Mask password for logging
-            const safeUri = this.uri.replace(/:([^:@]+)@/, ':****@');
-            console.log(`[MongoAdapter] Connecting to Atlas: ${safeUri}`);
+        if (!this.uri) {
+            console.error('[MongoAdapter] Error: MONGODB_URI is undefined. Check your .env file.');
+            throw new Error('Missing MONGODB_URI');
+        }
 
-            // Robust Connection Options for Windows/Atlas
+        try {
+            // Mask password for safe logging
+            const safeUri = this.uri.replace(/:([^:@]+)@/, ':****@');
+            console.log(`[MongoAdapter] Connecting to: ${safeUri}`);
+
+            // Production-Ready Options
             const options = {
-                serverSelectionTimeoutMS: 5000, // Fail fast if no connection
-                socketTimeoutMS: 45000, // Close sockets after 45s of inactivity
-                family: 4 // Force IPv4 (Fixes nodejs/node#40537 on Windows 10/11)
+                serverSelectionTimeoutMS: 5000,
+                socketTimeoutMS: 45000,
+                family: 4, // IPv4 Force (Required for some Windows setups)
+                maxPoolSize: 10,
+                retryWrites: true,
+                w: 'majority'
             };
 
             await mongoose.connect(this.uri, options);
             this.isConnected = true;
-            console.log('[MongoAdapter] Connected successfully');
+            console.log('[MongoAdapter] status: CONNECTED');
             return true;
         } catch (e) {
-            console.error('[MongoAdapter] Connection failed!');
-            console.error('Error Name:', e.name);
-            console.error('Error Message:', e.message);
-            console.error('Full Stack:', e.stack);
+            this.isConnected = false;
+            console.error('[MongoAdapter] Connection FAILED');
+            console.error(`[MongoAdapter] Reason: ${e.message}`);
 
-            if (e.message.includes('ECONNREFUSED')) {
-                console.error('[MongoAdapter] HINT: DNS Lookup Failed.');
-                console.error('[MongoAdapter] 1. Check Internet Connection.');
-                console.error('[MongoAdapter] 2. Try changing PC DNS to 8.8.8.8.');
-                console.error('[MongoAdapter] 3. Ensure IP Whitelist on Atlas includes CURRENT IP (0.0.0.0/0).');
+            if (e.message.includes('ECONNREFUSED') && e.message.includes('querySrv')) {
+                console.error('[MongoAdapter] ⚠️  SRV DNS Error detected. This is a network/environment issue, not a code bug.');
             }
-            return false;
+            // We throw here so the caller (db.js) knows it failed
+            throw e;
         }
     }
 
@@ -113,9 +118,10 @@ class MongoAdapter {
                     await Model.findOneAndDelete({ id: id });
                 }
                 return { success: true };
+            },
+            countDocuments: async (query = {}) => {
+                return await Model.countDocuments(query);
             }
         };
     }
 }
-
-module.exports = MongoAdapter;

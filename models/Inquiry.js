@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+import mongoose from 'mongoose';
 
 const InquirySchema = new mongoose.Schema({
     // Form fields
@@ -22,4 +22,4 @@ InquirySchema.set('toJSON', {
     transform: function (doc, ret) { delete ret._id; }
 });
 
-module.exports = mongoose.model('Inquiry', InquirySchema);
+export default mongoose.model('Inquiry', InquirySchema);

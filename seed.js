@@ -1,16 +1,22 @@
 /* eslint-disable no-console */
-const mongoose = require('mongoose');
-const fs = require('fs');
-const path = require('path');
-const bcrypt = require('bcryptjs');
+import mongoose from 'mongoose';
+import fs from 'fs';
+import path from 'path';
+import bcrypt from 'bcryptjs';
+import { fileURLToPath } from 'url';
+import dotenv from 'dotenv';
 
 // Load Models
-const Category = require('./models/Category');
-const Influencer = require('./models/Influencer');
-const User = require('./models/User');
+import Category from './models/Category.js';
+import Influencer from './models/Influencer.js';
+import User from './models/User.js';
 
-require('dotenv').config();
+dotenv.config();
 const MONGODB_URI = process.env.MONGODB_URI;
+
+// Path fix for ESM
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 if (!MONGODB_URI) {
     console.error('Error: MONGODB_URI is not defined in .env');

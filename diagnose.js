@@ -1,66 +1,23 @@
-const mongoose = require('mongoose');
-const http = require('http');
-require('dotenv').config();
+import mongoose from 'mongoose';
+import http from 'http';
+import dotenv from 'dotenv';
+dotenv.config();
 
-console.log('\n=== DIAGNOSTIC TOOL v1.0 ===');
-console.log('OS:', process.platform);
-console.log('Node:', process.version);
-console.log('Time:', new Date().toISOString());
+console.log('--- Database Diagnosis ---');
+console.log('URI:', process.env.MONGODB_URI ? 'Defined' : 'Missing');
 
-const MONGO_URI = process.env.MONGODB_URI;
-console.log('\n1. Checking Environment...');
-if (!MONGO_URI) {
-    console.error('❌ MONGODB_URI is MISSING in .env');
+if (process.env.MONGODB_URI) {
+    mongoose.connect(process.env.MONGODB_URI)
+        .then(() => {
+            console.log('Status: Connected');
+            process.exit(0);
+        })
+        .catch(err => {
+            console.error('Status: Failed');
+            console.error('Error:', err.message);
+            process.exit(1);
+        });
 } else {
-    console.log('✅ MONGODB_URI found:', MONGO_URI.split('@')[1]); // Log only host
+    console.error('Error: MONGODB_URI is not defined');
+    process.exit(1);
 }
-
-const PORT = process.env.PORT || 5000;
-console.log(`\n2. Checking Port ${PORT}...`);
-
-const checkPort = () => {
-    return new Promise((resolve) => {
-        const server = http.createServer();
-
-        server.once('error', (err) => {
-            if (err.code === 'EADDRINUSE') {
-                console.log(`⚠️  Port ${PORT} is BUSY. Something is already running here!`);
-                console.log('   (This is GOOD if it is your backend. BAD if it is a zombie process.)');
-                resolve(true); // Port is busy
-            } else {
-                console.error('❌ Port check error:', err.code);
-                resolve(false);
-            }
-        });
-
-        server.once('listening', () => {
-            console.log(`✅ Port ${PORT} is FREE. (The backend is NOT running)`);
-            server.close();
-            resolve(false); // Port is free
-        });
-
-        server.listen(PORT);
-    });
-};
-
-const checkMongo = async () => {
-    console.log('\n3. Testing MongoDB Connection...');
-    try {
-        await mongoose.connect(MONGO_URI, {
-            serverSelectionTimeoutMS: 5000,
-            family: 4
-        });
-        console.log('✅ MongoDB Connection SUCCESS!');
-        await mongoose.disconnect();
-    } catch (e) {
-        console.error('❌ MongoDB Connection FAILED:');
-        console.error('   ', e.message);
-    }
-};
-
-(async () => {
-    await checkPort();
-    if (MONGO_URI) await checkMongo();
-    console.log('\n=== END DIAGNOSTIC ===');
-    process.exit(0);
-})();
