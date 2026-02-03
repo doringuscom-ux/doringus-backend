@@ -51,6 +51,7 @@ app.use(compression());
 
 
 const allowedOrigins = [
+    "http://localhost:5173",
     "https://doringus.com",
     "https://www.doringus.com",
     "https://doringus-frontend.onrender.com"
