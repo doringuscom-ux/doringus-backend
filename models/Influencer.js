@@ -15,7 +15,8 @@ const InfluencerSchema = new mongoose.Schema({
 
     // Profile
     profileImage: String,
-    category: String,
+    categories: [String], // Support multiple categories
+    category: String,     // Keep for backward compatibility/single choice if needed
     rating: String,
     location: String,
     bio: String,

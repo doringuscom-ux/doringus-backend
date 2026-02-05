@@ -5,6 +5,7 @@ import mongoose from 'mongoose';
 import User from './models/User.js';
 import Influencer from './models/Influencer.js';
 import Category from './models/Category.js';
+import Location from './models/Location.js';
 import Inquiry from './models/Inquiry.js';
 import Campaign from './models/Campaign.js';
 
@@ -18,6 +19,7 @@ export default class MongoAdapter {
             users: this._wrapModel(User),
             influencers: this._wrapModel(Influencer),
             categories: this._wrapModel(Category),
+            locations: this._wrapModel(Location),
             inquiries: this._wrapModel(Inquiry),
             campaigns: this._wrapModel(Campaign)
         };

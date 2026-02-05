@@ -1,15 +1,29 @@
 import MongoAdapter from './mongoAdapter.js';
 import dotenv from 'dotenv';
+import Category from './models/Category.js';
+import Location from './models/Location.js';
+import Inquiry from './models/Inquiry.js';
 dotenv.config();
 
 // Configuration
 const MONGODB_URI = process.env.MONGODB_URI;
+
+// Placeholder for a potential model proxy function, assuming it's defined elsewhere or will be added.
+// For the purpose of this edit, we'll assume `createModelProxy` is available.
+// If it's not, this will cause a runtime error.
+const createModelProxy = (Model) => {
+    // This is a placeholder implementation.
+    // In a real scenario, this function would wrap the Mongoose model
+    // to provide additional functionality or a consistent interface.
+    return Model;
+};
 
 const db = {
     // Placeholders that will be populated by MongoAdapter
     users: null,
     influencers: null,
     categories: null,
+    locations: null,
     inquiries: null,
     campaigns: null,
     isConnected: false,
@@ -54,6 +68,7 @@ const db = {
         db.users = adapter.db.users;
         db.influencers = adapter.db.influencers;
         db.categories = adapter.db.categories;
+        db.locations = adapter.db.locations;
         db.inquiries = adapter.db.inquiries;
         db.campaigns = adapter.db.campaigns;
     }

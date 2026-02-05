@@ -52,6 +52,7 @@ app.use(compression());
 
 const allowedOrigins = [
     "http://localhost:5173",
+    "http://localhost:5174",
     "https://doringus.com",
     "https://www.doringus.com",
     "https://doringus-frontend.onrender.com"
@@ -255,7 +256,46 @@ const readJson = (file) => {
     return [];
 };
 
-// --- CATEGORY ROUTES ---
+// Locations
+apiRouter.get('/locations', async (req, res) => {
+    try {
+        let items = await db.locations.find();
+        if (items.length === 0) {
+            // Seed initial locations if none exist
+            const initial = [
+                { id: 'chandigarh', name: 'chandigarh', label: 'Chandigarh' },
+                { id: 'mohali', name: 'mohali', label: 'Mohali' },
+                { id: 'panchkula', name: 'panchkula', label: 'Panchkula' }
+            ];
+            for (const loc of initial) {
+                await db.locations.create(loc);
+            }
+            items = await db.locations.find();
+        }
+        res.json(items);
+    } catch (e) { res.status(500).json({ message: 'Failed to fetch locations' }); }
+});
+
+apiRouter.post('/locations', authenticate, isAdmin, async (req, res) => {
+    try {
+        console.log('[API] Adding location:', req.body);
+        const newItem = await db.locations.create(req.body);
+        console.log('[API] Location added:', newItem);
+        res.json(newItem);
+    } catch (e) {
+        console.error('[API] Add location FAILED:', e);
+        res.status(500).json({ message: 'Create failed', error: e.message });
+    }
+});
+
+apiRouter.delete('/locations/:id', authenticate, isAdmin, async (req, res) => {
+    try {
+        await db.locations.findByIdAndDelete(req.params.id);
+        res.json({ success: true });
+    } catch (e) { res.status(500).json({ message: 'Delete failed' }); }
+});
+
+// Categories
 apiRouter.get('/categories', async (req, res) => {
     try {
         let list = await db.categories.find({});
@@ -380,12 +420,20 @@ apiRouter.post('/influencers/login', async (req, res) => {
 
 apiRouter.post('/influencers/register', async (req, res) => {
     try {
-        const { email, username, password } = req.body;
+        const { email, username, password, category, categories } = req.body;
         if (await db.influencers.findOne({ $or: [{ email }, { username }] }))
             return res.status(400).json({ message: 'Email or Username exists already' });
+
         const hashedPassword = await bcrypt.hash(password, 10);
+
+        // Handle single category vs multiple categories normalization
+        const finalCategories = Array.isArray(categories) ? categories : (category ? [category] : []);
+
         const newItem = await db.influencers.create({
             ...req.body,
+            categories: finalCategories,
+            category: finalCategories[0] || '', // Fallback for legacy single field
+            followers: req.body.followers || req.body.instagramFollowers,
             password: hashedPassword,
             status: 'Pending',
             isFeatured: false,
@@ -398,8 +446,16 @@ apiRouter.post('/influencers/register', async (req, res) => {
 // Admin specific influencer routes
 apiRouter.post('/influencers', authenticate, isAdmin, async (req, res) => {
     try {
+        const { category, categories } = req.body;
         if (req.body.password) req.body.password = await bcrypt.hash(req.body.password, 10);
-        const inf = await db.influencers.create(req.body);
+
+        const finalCategories = Array.isArray(categories) ? categories : (category ? [category] : []);
+
+        const inf = await db.influencers.create({
+            ...req.body,
+            categories: finalCategories,
+            category: finalCategories[0] || ''
+        });
         res.json(inf);
     } catch (e) { res.status(500).json({ message: 'Create failed' }); }
 });
@@ -413,7 +469,15 @@ apiRouter.put('/influencers/status/:id', authenticate, isAdmin, async (req, res)
 
 apiRouter.put('/influencers/update/:id', authenticate, async (req, res) => {
     try {
-        const inf = await db.influencers.findByIdAndUpdate(req.params.id, req.body);
+        const { category, categories } = req.body;
+        const updateData = { ...req.body };
+
+        if (categories || category) {
+            updateData.categories = Array.isArray(categories) ? categories : (category ? [category] : []);
+            updateData.category = updateData.categories[0] || '';
+        }
+
+        const inf = await db.influencers.findByIdAndUpdate(req.params.id, updateData, { new: true });
         res.json({ success: true, influencer: inf });
     } catch (e) { res.status(500).json({ message: 'Update failed' }); }
 });
@@ -570,6 +634,20 @@ const autoSeed = async () => {
             console.log(`[Auto-Seed] Seeded ${influencers.length} influencers.`);
         }
 
+        // 3. Admin User - Re-added for access stability
+        const userCount = await db.users.countDocuments({});
+        if (userCount === 0) {
+            console.log('[Auto-Seed] Users empty. Creating default Admin...');
+            const hashedPassword = await bcrypt.hash('admin123', 10);
+            await db.users.create({
+                username: 'admin',
+                password: hashedPassword,
+                email: 'admin@doringus.com',
+                role: 'superadmin'
+            });
+            console.log('[Auto-Seed] Created default superadmin: admin / admin123');
+        }
+
     } catch (e) {
         console.error('[Auto-Seed] Failed:', e.message);
     }
@@ -588,6 +666,7 @@ app.get("/", (req, res) => {
         message: "Doringus Backend API is Live 🚀"
     });
 });
+
 
 // --- BOOTSTRAP ---
 const start = async () => {
@@ -631,6 +710,10 @@ const start = async () => {
     }
 };
 
-start();
+// Check if this file is the main module being executed
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+    start();
+}
+
 
 export default app;
